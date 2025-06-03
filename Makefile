@@ -32,8 +32,12 @@ UNAME_S := $(shell uname -s)
 LINUX_GL_LIBS = -lGL
 
 CXXFLAGS = -std=c++23 -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends
-CXXFLAGS += -g -Wall -Wformat -Wno-unknown-pragmas -Wno-class-memaccess
-CXXFLAGS += -fsanitize=address
+CXXFLAGS += -Wall -Wformat -Wno-unknown-pragmas -Wno-class-memaccess
+ifdef DEBUG
+CXXFLAGS += -g -fsanitize=address
+else
+CXXFLAGS += -O3
+endif
 LIBS =
 
 ##---------------------------------------------------------------------
