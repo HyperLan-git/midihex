@@ -1,6 +1,6 @@
 *.o
 imgui.ini
-main
+midihex
 .vs
 Debug
 Release

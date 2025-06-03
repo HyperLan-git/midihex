@@ -14,7 +14,7 @@
 #CXX = g++
 #CXX = clang++
 
-EXE = bin/main
+EXE = bin/midihex
 IMGUI_DIR = ../imgui
 OBJDIR = bin/obj
 INCLUDEFOLDER = include
@@ -69,8 +69,6 @@ endif
 
 
 all: $(EXE)
-#	@echo $(SOURCES)
-	@echo $(OBJS)
 	@echo Build complete for $(ECHO_MESSAGE)
 
 ##---------------------------------------------------------------------
