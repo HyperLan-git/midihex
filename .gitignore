@@ -1,0 +1,9 @@
+*.o
+imgui.ini
+main
+.vs
+Debug
+Release
+*.pdb
+resources/testing/*.mid
+*.log
