@@ -67,8 +67,9 @@ ifeq ($(OS), Windows_NT)
 	ECHO_MESSAGE = "MinGW"
 	LIBS += -lglfw3 -lgdi32 -lopengl32 -limm32
 
-	CXXFLAGS += `pkg-config --cflags glfw3`
+	CXXFLAGS += `pkg-config --cflags glfw3` -D _WIN32
 	CFLAGS = $(CXXFLAGS)
+	LDFLAGS = $(subst MINGW,-luuid -lucrt,$(findstring MINGW,$(shell uname)))
 endif
 
 
@@ -100,7 +101,7 @@ $(OBJDIR)/imgui/%.o:$(IMGUI_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDE) -c -o $@ $<
 
 $(EXE): $(OBJS)
-	$(CXX) -o $@ $^ $(CXXFLAGS) $(LIBS)
+	$(CXX) -o $@ $^ $(CXXFLAGS) $(LIBS) $(LDFLAGS)
 
 clean:
 	rm -rf bin/*

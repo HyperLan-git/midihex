@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 
+#define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 ResourceManager::ResourceManager() {}
@@ -19,6 +20,7 @@ bool LoadTextureFromMemory(const void* data, size_t data_size,
     unsigned char* image_data =
         stbi_load_from_memory((const unsigned char*)data, (int)data_size,
                               &image_width, &image_height, NULL, 4);
+    std::cout << data_size << ((image_data == NULL) ? "t":"f") << std::endl;
     if (image_data == NULL) return false;
 
     // Create a OpenGL texture identifier
@@ -45,28 +47,30 @@ bool LoadTextureFromMemory(const void* data, size_t data_size,
 
 bool LoadTextureFromFile(const char* file_name, GLuint& out_texture,
                          int& out_width, int& out_height) {
-    std::ifstream f(file_name, std::fstream::in);
-    if (!f.is_open()) {
-        std::cerr << "Could not open file !\n";
-        return false;
-    }
+    int a;
+    int image_width = 0;
+    int image_height = 0;
+    unsigned char* image_data = stbi_load(file_name, &image_width, &image_height, &a, 4);
+    
+    // Create a OpenGL texture identifier
+    GLuint image_texture;
+    glGenTextures(1, &image_texture);
+    glBindTexture(GL_TEXTURE_2D, image_texture);
 
-    f.seekg(0, std::fstream::end);
-    std::size_t sz = f.tellg();
-    if (f.fail()) {
-        f.close();
-        std::cerr << "Failed to read file !\n";
-        return false;
-    }
+    // Setup filtering parameters for display
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    u8* buffer = new u8[sz];
-    f.seekg(std::fstream::beg);
-    f.read((char*)buffer, sz);
-    f.close();
-    bool ret =
-        LoadTextureFromMemory(buffer, sz, out_texture, out_width, out_height);
-    delete[] buffer;
-    return ret;
+    // Upload pixels into texture
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, image_data);
+    stbi_image_free(image_data);
+
+    out_texture = image_texture;
+    out_width = image_width;
+    out_height = image_height;
+    return out_texture != 0;
 }
 
 void ResourceManager::load() {

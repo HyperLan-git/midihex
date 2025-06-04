@@ -44,9 +44,9 @@ Editor::Editor() {
 }
 
 void Editor::load() {
-    resourceManager.addTexture("new_icon", "resources/images/New.png");
-    resourceManager.addTexture("load_icon", "resources/images/Load.png");
-    resourceManager.addTexture("save_icon", "resources/images/Save.png");
+    resourceManager.addTexture("new_icon", "./resources/images/New.png");
+    resourceManager.addTexture("load_icon", "./resources/images/Load.png");
+    resourceManager.addTexture("save_icon", "./resources/images/Save.png");
 
     resourceManager.load();
 

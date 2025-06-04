@@ -18,13 +18,13 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN 1
 #endif
+#include <windows.h>
 #include <commdlg.h>
 #include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl.h>  // IFileDialog
 #include <strsafe.h>
 #include <userenv.h>  // GetUserProfileDirectory()
-#include <windows.h>
 
 #include <future>  // std::async
 
