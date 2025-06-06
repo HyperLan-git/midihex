@@ -365,6 +365,7 @@ struct MidiFile {
     // Should be an array of tracks for multi-track files
     struct MidiTrack *data = nullptr;
 
+    // TODO put that in track data for type 2 files
     std::vector<TempoChange> timingInfo;
     std::vector<TimeSignatureChange> timeSignatureInfo;
     ~MidiFile() { delete[] data; }

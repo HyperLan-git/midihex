@@ -265,7 +265,9 @@ void Editor::renderTable(std::shared_ptr<MidiFile>& data) {
                                       .timeMicros = 0,
                                       .microsPerTick = getMicrosPerTick(
                                           data->division, 500000)};
-                ImGui::Text("%llu", getTimeMicros(tempo, message.time));
+                ImGui::Text((sizeof(unsigned long long) == sizeof(u64)) ? "%llu"
+                                                                        : "%lu",
+                            getTimeMicros(tempo, message.time));
             }
             if (ImGui::TableNextColumn()) printTextForTrackEventType(message);
             if (ImGui::TableNextColumn()) {
