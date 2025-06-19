@@ -6,6 +6,8 @@
 #include "Editor.hpp"
 #include "MidiFile.hpp"
 
+// TODO maybe put everything in namespaces?
+
 int processMain(int argc, char** argv, Editor* e) {
     if (argc >= 2) {
         e->loadFile(argv[1]);

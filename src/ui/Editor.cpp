@@ -47,6 +47,10 @@ void Editor::load() {
     resourceManager.addTexture("new_icon", "./resources/images/New.png");
     resourceManager.addTexture("load_icon", "./resources/images/Load.png");
     resourceManager.addTexture("save_icon", "./resources/images/Save.png");
+    resourceManager.addTexture("add_event_icon",
+                               "./resources/images/MidiAdd.png");
+    resourceManager.addTexture("remove_event_icon",
+                               "./resources/images/MidiSub.png");
 
     resourceManager.load();
 
@@ -116,12 +120,20 @@ void Editor::render() {
     }
     ImGui::End();
 
-    if (trackEditorOpen) ImGui::OpenPopup("Track editor");
+    if (!error.empty())
+        ImGui::OpenPopup("Error");
+    else if (trackEditorOpen && data)
+        ImGui::OpenPopup("Track editor");
+    else if (addEventEditorOpen && data)
+        ImGui::OpenPopup("Event add editor");
+
     renderTrackEditor(data);
-    if (!error.empty()) ImGui::OpenPopup("Error");
+
+    renderEventAddEditor(data);
+
     renderError();
 
-    renderApplicationBar(data);
+    renderApplicationBar();
 
     renderFileParams(data);
     renderTable(data);
@@ -194,32 +206,52 @@ void Editor::loadFile(std::string path) {
 void Editor::saveFile(std::string path) {
     std::ofstream stream(path, std::ios::out | std::ios::binary);
     std::shared_ptr<MidiFile> file = getData();
+    if (!file) return;
     enum MidiError err = writeMidiFile(*file, stream);
     if (err != NONE) {
         std::cerr << "Could not save midi file : " << err << "\n";
     }
 }
 
-void Editor::addEvent(MidiTrack& track,
-                      std::vector<TrackEvent>::const_iterator pos,
-                      const TrackEvent& e) {
-    track.list.insert(pos, e);
+// XXX fix potential race condition
+void Editor::addEvent(u16 track, u32 pos, const TrackEvent& e) {
+    std::shared_ptr<MidiFile> data = getData();
+    if (!data) return;
+    MidiTrack& t = data->data[track];
+    std::vector<TrackEvent>& eList = t.list;
+    eList.insert(eList.cbegin() + pos, e);
     this->totalEvents++;
     if (e.type == META) {
-        std::shared_ptr<MidiFile> d = getData();
         if (e.meta->type == SET_TEMPO) {
-            for (u16 i = 0; i < d->tracks; i++)
-                computeTimingMapForTrack(*d, track);
+            for (u16 i = 0; i < data->tracks; i++)
+                computeTimingMapForTrack(*data, data->data[i]);
         } else if (e.meta->type == TIME_SIGNATURE) {
-            for (u16 i = 0; i < d->tracks; i++)
-                computeTimeSignatureMapForTrack(*d, track);
+            for (u16 i = 0; i < data->tracks; i++)
+                computeTimeSignatureMapForTrack(*data, data->data[i]);
         }
     }
-    computeTimes(track.list);
+    computeTimes(eList);
 }
 
-void Editor::removeEvent(MidiTrack& track,
-                         std::vector<TrackEvent>::iterator e) {}
+void Editor::removeEvent(u16 track, u32 pos) {
+    std::shared_ptr<MidiFile> data = getData();
+    if (!data) return;
+    MidiTrack& t = data->data[track];
+    std::vector<TrackEvent>& eList = t.list;
+    const TrackEvent e(eList[pos]);
+    eList.erase(eList.cbegin() + pos);
+    this->totalEvents--;
+    if (e.type == META) {
+        if (e.meta->type == SET_TEMPO) {
+            for (u16 i = 0; i < data->tracks; i++)
+                computeTimingMapForTrack(*data, t);
+        } else if (e.meta->type == TIME_SIGNATURE) {
+            for (u16 i = 0; i < data->tracks; i++)
+                computeTimeSignatureMapForTrack(*data, t);
+        }
+    }
+    computeTimes(eList);
+}
 
 Editor::~Editor() {
     while (glGetError() != GL_NO_ERROR);

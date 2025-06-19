@@ -27,7 +27,6 @@ void Editor::printTextForTrackEventType(const TrackEvent& ev) {
                 case PITCH_WHEEL:
                     ImGui::Text("MIDI PITCH WHEEL");
                     break;
-                case SYSTEM:
                 default:
                     ImGui::Text("MIDI 0x%02X", ev.midi.type);
                     break;
@@ -189,7 +188,6 @@ bool Editor::printDataTextForTrackEvent(TrackEvent& ev) {
                     ev.midi.data0 = j & 0x7F;
                     ev.midi.data1 = (j >> 7) & 0x7F;
                     break;
-                case SYSTEM:
                 default:
                     break;
             }

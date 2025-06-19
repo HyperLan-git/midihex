@@ -48,13 +48,23 @@ class Editor {
 
     bool shouldClose() { return glfwWindowShouldClose(window); }
 
-    void openTrackEditor() { trackEditorOpen = true; }
+    void openTrackEditor() {
+        if (!data) return;
+        trackEditorOpen = true;
+    }
+    void openAddEventEditor() {
+        if (!data) return;
+        addEventEditorOpen = true;
+    }
 
     void showError(std::string error) { this->error = error; }
 
-    void addEvent(MidiTrack& track, std::vector<TrackEvent>::const_iterator pos,
-                  const TrackEvent& e);
-    void removeEvent(MidiTrack& track, std::vector<TrackEvent>::iterator e);
+    void addEvent(u16 track, u32 pos, const TrackEvent& e);
+    void removeEvent(u16 track, u32 pos);
+
+    void deleteSelectedEvent() {
+        removeEvent(this->selectedTrack, this->selectedEvent);
+    }
 
     ~Editor();
 
@@ -78,6 +88,9 @@ class Editor {
 
     bool trackEditorOpen = false;
 
+    bool addEventEditorOpen = false;
+    u32 selectedTrack = 0, selectedEvent = 0;
+
     std::string error;
 
     bool printDataTextForTrackEvent(TrackEvent& ev);
@@ -86,7 +99,8 @@ class Editor {
     void renderFileParams(std::shared_ptr<MidiFile>& data);
     void renderTable(std::shared_ptr<MidiFile>& data);
     void renderParams(std::shared_ptr<MidiFile>& data);
-    void renderApplicationBar(std::shared_ptr<MidiFile>& data);
+    void renderApplicationBar();
     void renderTrackEditor(std::shared_ptr<MidiFile>& data);
+    void renderEventAddEditor(std::shared_ptr<MidiFile>& data);
     void renderError();
 };

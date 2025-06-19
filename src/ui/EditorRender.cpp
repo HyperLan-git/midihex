@@ -8,7 +8,7 @@ inline void createImageButton(const std::string& id, ButtonHandler& handler,
     }
 }
 
-void Editor::renderApplicationBar(std::shared_ptr<MidiFile>& data) {
+void Editor::renderApplicationBar() {
     constexpr ImGuiWindowFlags flags =
         ImGuiWindowFlags_NoResize | ImGuiWindowFlags_HorizontalScrollbar;
     constexpr ImVec2 sz = {500, 100};
@@ -22,7 +22,11 @@ void Editor::renderApplicationBar(std::shared_ptr<MidiFile>& data) {
 
     const Texture &newIcon = this->resourceManager.getTexture("new_icon"),
                   &loadIcon = this->resourceManager.getTexture("load_icon"),
-                  &saveIcon = this->resourceManager.getTexture("save_icon");
+                  &saveIcon = this->resourceManager.getTexture("save_icon"),
+                  &addMidiIcon =
+                      this->resourceManager.getTexture("add_event_icon"),
+                  &removeMidiIcon =
+                      this->resourceManager.getTexture("remove_event_icon");
 
     createImageButton("New", this->buttonHandler, newIcon);
 
@@ -32,8 +36,376 @@ void Editor::renderApplicationBar(std::shared_ptr<MidiFile>& data) {
     if (szTools.x >= newIcon.w * 4) ImGui::SameLine();
     createImageButton("Save", this->buttonHandler, saveIcon);
 
+    if (szTools.x >= newIcon.w * 5) ImGui::SameLine();
+    createImageButton("Add event", this->buttonHandler, addMidiIcon);
+
+    if (szTools.x >= newIcon.w * 6) ImGui::SameLine();
+    createImageButton("Remove event", this->buttonHandler, removeMidiIcon);
+
     ImGui::End();
 }
+
+#pragma region ADD_EVENT_EDITOR
+
+// TODO maybe put all these in the caller's responsibility or in a new class
+TrackEvent buffer = TrackEvent(
+    MidiEvent{.type = NOTE_OFF, .channel = 0, .data0 = 0, .data1 = 0});
+
+constexpr v_len MAX_DATA_LEN = 512;
+u8* strBuf = new u8[MAX_DATA_LEN];
+u8* strBuf2 = new u8[MAX_DATA_LEN];
+std::string hexString, metaString;
+MetaEvent* metaBuffer = new MetaEvent(TEXT, strBuf, 0);
+SysExEvent* sysExBuffer = new SysExEvent(strBuf2, 0);
+
+enum TrackEventType getTrackEventType(int num) {
+    switch (num) {
+        case MIDI:
+            return MIDI;
+        case SYSTEM_EVENT:
+            return SYSTEM_EVENT;
+        case META:
+            return META;
+        case SYSEX_EVENT:
+            return SYSEX_EVENT;
+        default:
+            return UNKOWN;
+    }
+}
+constexpr enum MetaEventType metaTypes[] = {
+    SEQUENCE_NUMBER, TEXT,
+    COPYRIGHT,       NAME,
+    INSTRUMENT_NAME, LYRIC,
+    MARKER,          CUE,
+    DEVICE_NAME,     MIDI_CHANNEL_PREFIX,
+    SET_TEMPO,       SMPTE_OFFSET,
+    TIME_SIGNATURE,  KEY_SIGNATURE,
+    SPECIFIC};
+
+constexpr long metaTypesNum = sizeof(metaTypes) / sizeof(metaTypes[0]);
+
+enum MetaEventType getMetaEventType(int num) {
+    if (num < metaTypesNum) return metaTypes[num];
+    return SPECIFIC;
+}
+
+int getMetaEventID(enum MetaEventType type) {
+    for (int i = 0; i < metaTypesNum; i++) {
+        if (metaTypes[i] == type) return i;
+    }
+    return 0;
+}
+
+std::stringstream resultString;
+std::string result;
+#include <iomanip>
+
+int callbackResizeHex(ImGuiInputTextCallbackData* data) {
+    if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
+        // Resize string callback
+        // If for some reason we refuse the new length (BufTextLen) and/or
+        // capacity (BufSize) we need to set them back to what we want.
+        std::string* str = (std::string*)data->UserData;
+        IM_ASSERT(data->Buf == str->data());
+        str->resize(data->BufTextLen);
+        data->Buf = str->data();
+    } else if (data->EventFlag == ImGuiInputTextFlags_CallbackCharFilter) {
+        if ((data->EventChar < '0' || data->EventChar > '9') &&
+            (data->EventChar < 'a' || data->EventChar > 'f') &&
+            (data->EventChar < 'A' || data->EventChar > 'F') &&
+            (data->EventChar != ' ' && data->EventChar != '\n'))
+            return 1;
+    }
+    return 0;
+}
+
+// Returns used array length
+std::size_t hexStringToArray(const std::string& hex, u8* array,
+                             std::size_t sz) {
+    std::size_t a = 0;
+    bool char2 = false;
+    for (std::size_t i = 0; i < hex.size(); i++) {
+        const char c = hex[i];
+        if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+            (c >= 'A' && c <= 'F')) {
+            u8 val = 0;
+            if (c >= '0' && c <= '9') {
+                val = c - '0';
+            } else if (c >= 'a' && c <= 'f') {
+                val = c - 'a' + 10;
+            } else {
+                val = c - 'A' + 10;
+            }
+
+            if (char2) {
+                array[a] += val;
+                if (++a >= sz) return a;
+            } else {
+                array[a] = val << 4;
+            }
+            char2 = !char2;
+        }
+    }
+    return a + char2;
+}
+
+bool renderHexEditor(const char* label, std::string& result,
+                     std::size_t max_sz = 65535 * 2) {
+    bool changed = ImGui::InputTextMultiline(
+        label, result.data(), result.size() + 1, {0, 0},
+        ImGuiInputTextFlags_CallbackCharFilter |
+            ImGuiInputTextFlags_CallbackResize,
+        callbackResizeHex, &result);
+    if (result.size() > max_sz) result.resize(max_sz);
+
+    return changed;
+}
+
+bool renderStringEditor(const char* label, std::string& result,
+                        std::size_t max_sz = 65535) {
+    bool changed = ImGui::InputTextMultiline(
+        label, result.data(), result.size() + 1, {0, 0},
+        ImGuiInputTextFlags_CallbackResize, callbackResizeHex, &result);
+    if (result.size() > max_sz) result.resize(max_sz);
+
+    return changed;
+}
+
+void Editor::renderEventAddEditor(std::shared_ptr<MidiFile>& data) {
+    if (!data) return;
+    ImGui::SetNextWindowSizeConstraints({500, 450}, {900, 600});
+    if (!ImGui::BeginPopupModal("Event add editor",
+                                &this->addEventEditorOpen)) {
+        return;
+    }
+    int v;
+    int buf = this->selectedTrack;
+    bool changed = result.empty();
+
+    ImGui::SetNextItemWidth(150);
+    changed |= ImGui::InputInt("New event's track", &buf);
+    this->selectedTrack = std::clamp(buf, 0, data->tracks - 1);
+
+    buf = this->selectedEvent;
+    ImGui::SetNextItemWidth(150);
+    changed |= ImGui::InputInt("New event's index", &buf);
+    this->selectedEvent = std::clamp(
+        buf, 0, (int)(data->data[this->selectedTrack].list.size() - 1));
+
+    ImGui::SetNextItemWidth(150);
+    v = buffer.deltaTime;
+    changed |= ImGui::InputInt("Delta time", &v);
+    buffer.deltaTime = std::clamp(v, 0, 0xFFFFFFF);
+
+    constexpr char EVENT_TYPES[] = "Track\0Meta\0Sysex\0";
+
+    buf = (int)buffer.type - 1;
+    ImGui::SetNextItemWidth(150);
+    changed |= ImGui::Combo("Event type", &buf, EVENT_TYPES);
+    buffer.type = getTrackEventType(buf + 1);
+
+    constexpr char MIDI_TYPES[] =
+        "NOTE ON\0NOTE OFF\0POLYPHONIC AFTERTOUCH\0"
+        "MIDI CC\0AFTERTOUCH\0PITCH WHEEL\0";
+    constexpr char META_TYPES[] =
+        "SEQUENCE NUMBER\0TEXT\0COPYRIGHT\0NAME\0INSTRUMENT "
+        "NAME\0LYRIC\0MARKER\0CUE\0DEVICE NAME\0MIDI CHANNEL PREFIX\0SET "
+        "TEMPO\0SMPTE OFFSET\0TIME SIGNATURE\0KEY SIGNATURE\0VENDOR SPECIFIC\0";
+
+    int w;
+    bool b;
+    switch (buffer.type) {
+        case MIDI:
+            w = buffer.midi.type - NOTE_OFF;
+            ImGui::SetNextItemWidth(200);
+            changed |= ImGui::Combo("Channel event type", &w, MIDI_TYPES);
+            buffer.midi.type = w + NOTE_OFF;
+
+            v = buffer.midi.channel;
+            ImGui::SetNextItemWidth(150);
+            changed |= ImGui::InputInt("Channel", &v, 1, 5);
+            buffer.midi.channel = std::clamp(v, 0, 0xF);
+
+            ImGui::SetNextItemWidth(100);
+            v = buffer.midi.data0;
+            changed |= ImGui::InputInt("data0", &v);
+            buffer.midi.data0 = std::clamp(v, 0, 0x7F);
+
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(100);
+            v = buffer.midi.data1;
+
+            if (buffer.midi.type == PROGRAM_CHANGE ||
+                buffer.midi.type == AFTERTOUCH) {
+                ImGui::BeginDisabled();
+                changed |= ImGui::InputInt("data1", &v);
+                ImGui::EndDisabled();
+            } else {
+                changed |= ImGui::InputInt("data1", &v);
+            }
+            buffer.midi.data1 = std::clamp(v, 0, 0x7F);
+
+            break;
+        case META:
+            buffer.meta = metaBuffer;
+            w = getMetaEventID((enum MetaEventType)buffer.meta->type);
+            ImGui::SetNextItemWidth(200);
+            changed |= ImGui::Combo("Meta event type", &w, META_TYPES);
+            buffer.meta->type = getMetaEventType(w);
+            switch (buffer.meta->type) {
+                case MIDI_CHANNEL_PREFIX:
+                    v = buffer.meta->channel;
+                    ImGui::SetNextItemWidth(150);
+                    changed |= ImGui::InputInt("Channel", &v, 1, 5);
+                    buffer.meta->channel = std::clamp(v, 0, 15);
+                    break;
+                case SET_TEMPO:
+                    v = buffer.meta->MPQ;
+                    ImGui::SetNextItemWidth(150);
+                    changed |=
+                        ImGui::InputInt("Microseconds per quarter note", &v);
+                    buffer.meta->MPQ = std::clamp(v, 0, 0xFFFFFF);
+                    break;
+                case SEQUENCE_NUMBER:
+                    v = buffer.meta->seqNumber;
+                    ImGui::SetNextItemWidth(150);
+                    changed |= ImGui::InputInt("Sequence number", &v);
+                    buffer.meta->seqNumber = std::clamp(v, 0, 0xFFFF);
+                    break;
+                case SMPTE_OFFSET:
+                    v = buffer.meta->startTime.hours;
+                    ImGui::SetNextItemWidth(100);
+                    ImGui::PushID(1);
+                    changed |= ImGui::InputInt(":", &v);
+                    ImGui::PopID();
+                    buffer.meta->startTime.hours = std::clamp(v, 0, 0xFF);
+
+                    ImGui::SameLine();
+                    v = buffer.meta->startTime.minutes;
+                    ImGui::SetNextItemWidth(100);
+                    changed |= ImGui::InputInt(":", &v);
+                    buffer.meta->startTime.minutes = std::clamp(v, 0, 59);
+
+                    ImGui::SameLine();
+                    v = buffer.meta->startTime.seconds;
+                    ImGui::SetNextItemWidth(150);
+                    changed |= ImGui::InputInt("Time (hh:mm:ss)", &v);
+                    buffer.meta->startTime.seconds = std::clamp(v, 0, 59);
+
+                    v = buffer.meta->startTime.frames;
+                    ImGui::SetNextItemWidth(100);
+                    changed |= ImGui::InputInt("Frames", &v);
+                    buffer.meta->startTime.frames = std::clamp(v, 0, 99);
+
+                    ImGui::SameLine();
+                    v = buffer.meta->startTime.frameFractions;
+                    ImGui::SetNextItemWidth(100);
+                    changed |= ImGui::InputInt("Frame fractions", &v);
+                    buffer.meta->startTime.frameFractions =
+                        std::clamp(v, 0, 99);
+                    break;
+                case TIME_SIGNATURE:
+                    v = buffer.meta->timeSignature.numerator;
+                    ImGui::SetNextItemWidth(100);
+                    changed |= ImGui::InputInt("Numerator", &v);
+                    buffer.meta->timeSignature.numerator =
+                        std::clamp(v, 0, 255);
+
+                    ImGui::SameLine();
+                    v = buffer.meta->timeSignature.denominator;
+                    ImGui::SetNextItemWidth(100);
+                    changed |= ImGui::InputInt("Denominator (2^)", &v);
+                    buffer.meta->timeSignature.denominator =
+                        std::clamp(v, 0, 255);
+
+                    v = buffer.meta->timeSignature.TPM;
+                    ImGui::SetNextItemWidth(100);
+                    changed |= ImGui::InputInt("Midi ticks per beat", &v);
+                    buffer.meta->timeSignature.TPM = std::clamp(v, 0, 255);
+
+                    v = buffer.meta->timeSignature.noteDivision;
+                    ImGui::SetNextItemWidth(100);
+                    changed |= ImGui::InputInt("32nd notes per beat", &v);
+                    buffer.meta->timeSignature.noteDivision =
+                        std::clamp(v, 0, 255);
+                    break;
+                case KEY_SIGNATURE:
+                    ImGui::SetNextItemWidth(100);
+                    b = buffer.meta->key.minor;
+                    changed |= ImGui::Checkbox("Minor key", &b);
+                    buffer.meta->key.minor = b ? 1 : 0;
+
+                    v = buffer.meta->key.sharps;
+                    ImGui::SetNextItemWidth(100);
+                    changed |=
+                        ImGui::InputInt("Sharps (negative for flats)", &v);
+                    buffer.meta->key.sharps = std::clamp(v, -7, 7);
+                    break;
+                case SPECIFIC:
+                    buffer.meta->data = strBuf;
+                    b = renderHexEditor("Content", hexString);
+                    changed |= b;
+                    if (b)
+                        buffer.meta->length =
+                            hexStringToArray(hexString, strBuf, MAX_DATA_LEN);
+                    break;
+                default:
+                    buffer.meta->data = strBuf;
+                    changed |= renderStringEditor("Text", metaString,
+                                                  MAX_DATA_LEN - 1);
+                    buffer.meta->length = metaString.size();
+                    std::memcpy(strBuf, metaString.c_str(),
+                                metaString.size() + 1);
+            }
+            break;
+        case SYSEX_EVENT:
+            buffer.sysex = sysExBuffer;
+            b = renderHexEditor("Content", hexString);
+            changed |= b;
+            if (b) {
+                buffer.sysex->length =
+                    hexStringToArray(hexString, strBuf2, MAX_DATA_LEN);
+                if (buffer.sysex->length < MAX_DATA_LEN - 1) {
+                    buffer.sysex->data[buffer.sysex->length++] = (u8)0xF7;
+                } else {
+                    buffer.sysex->data[MAX_DATA_LEN - 1] = (u8)0xF7;
+                }
+            }
+            break;
+        default:
+            ImGui::Text("Wrong event type %d", buffer.type);
+            break;
+    }
+
+    if (changed) {
+        resultString = std::stringstream();
+        enum MidiError err = encodeTrackEvent(buffer, resultString);
+        if (err != NONE) std::cout << "Err: " << err << std::endl;
+        resultString.seekg(0, std::ios::end);
+        std::streampos sz = resultString.tellg();
+        resultString.seekg(0, std::ios::beg);
+        std::string resStr = resultString.str();
+        std::stringstream tmp;
+        tmp << std::hex << std::uppercase << std::setfill('0');
+        for (u32 i = 0; i < sz; i++) {
+            tmp << std::setw(2) << (u16)(resStr[i] & 0xff)
+                << (i % 8 == 7 ? "\n" : " ");
+        }
+        result = tmp.str();
+        if (result.size() > 0) result.resize(result.size() - 1);
+    }
+
+    ImGui::InputTextMultiline("Result", result.data(), result.size() + 1,
+                              {0, 0}, ImGuiInputTextFlags_ReadOnly);
+
+    if (ImGui::Button("Add")) {
+        this->addEvent(this->selectedTrack, this->selectedEvent, buffer);
+        this->addEventEditorOpen = false;
+    }
+    ImGui::EndPopup();
+}
+
+#pragma endregion
 
 void Editor::renderError() {
     bool open = !error.empty();
@@ -48,6 +420,7 @@ void Editor::renderError() {
 }
 
 void Editor::renderTrackEditor(std::shared_ptr<MidiFile>& data) {
+    if (!data) return;
     if (!ImGui::BeginPopupModal("Track editor", &this->trackEditorOpen)) {
         return;
     }
@@ -222,6 +595,10 @@ void Editor::renderTable(std::shared_ptr<MidiFile>& data) {
     u64 remaining = this->eventTableSize;
     u32 o = offset;
     bool tempoChanged = false, timeSignatureChanged = false;
+    const TempoChange defaultTempo =
+        TempoChange{.time = 0,
+                    .timeMicros = 0,
+                    .microsPerTick = getMicrosPerTick(data->division, 500000)};
     for (u32 j = 0; j < data->tracks; j++) {
         if (this->trackToShow != 0 && this->trackToShow != j + 1) continue;
         MidiTrack& track = data->data[j];
@@ -252,22 +629,22 @@ void Editor::renderTable(std::shared_ptr<MidiFile>& data) {
             }
             if (ImGui::TableNextColumn()) ImGui::Text("%u", message.deltaTime);
             if (ImGui::TableNextColumn()) ImGui::Text("%u", message.time);
-            // TODO put those computations in update() if optimisation needed
+            // TODO put those computations in update() if optimisation
+            // needed
             if (ImGui::TableNextColumn()) {
                 BarTime bar = getBar(data->timeSignatureInfo, message.time);
                 ImGui::Text("%u : %.4lf", bar.bar, bar.barTime);
             }
             if (ImGui::TableNextColumn()) {
-                TempoChange tempo =
-                    (t != data->timingInfo.cend())
-                        ? *t
-                        : TempoChange{.time = 0,
-                                      .timeMicros = 0,
-                                      .microsPerTick = getMicrosPerTick(
-                                          data->division, 500000)};
-                ImGui::Text((sizeof(unsigned long long) == sizeof(u64)) ? "%llu"
-                                                                        : "%lu",
-                            getTimeMicros(tempo, message.time));
+                const TempoChange& tempo =
+                    (t != data->timingInfo.cend()) ? *t : defaultTempo;
+                // Stupid warning needs an explicit cast
+                if (sizeof(unsigned long long) == sizeof(u64))
+                    ImGui::Text("%llu", (unsigned long long)getTimeMicros(
+                                            tempo, message.time));
+                else
+                    ImGui::Text("%lu", (unsigned long)getTimeMicros(
+                                           tempo, message.time));
             }
             if (ImGui::TableNextColumn()) printTextForTrackEventType(message);
             if (ImGui::TableNextColumn()) {
@@ -280,6 +657,18 @@ void Editor::renderTable(std::shared_ptr<MidiFile>& data) {
                     timeSignatureChanged = true;
                 }
             }
+
+            constexpr ImGuiSelectableFlags selectable_flags =
+                ImGuiSelectableFlags_SpanAllColumns |
+                ImGuiSelectableFlags_AllowItemOverlap;
+            ImGui::SameLine();
+            if (ImGui::Selectable(
+                    "", this->selectedEvent == i && selectedTrack == j,
+                    selectable_flags, ImVec2(0, 0))) {
+                this->selectedEvent = i;
+                this->selectedTrack = j;
+            }
+
             ImGui::PopID();
 
             if (--remaining == 0) break;

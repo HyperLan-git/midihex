@@ -7,10 +7,8 @@
 
 struct Texture {
     bool loaded = false;
-    union {
-        const char* path;
-        u32 tex;
-    };
+    const char* path;
+    u32 tex = 0;
     int w, h;
 
     Texture(const char* path) { this->path = path; }

@@ -10,6 +10,7 @@
 // Variable length quantity (encoded values between 8 and 28 bits)
 typedef u32 v_len;
 
+// XXX I didnt even need to implement system messages wtf....
 #pragma region ENUMS
 enum MidiTrackType {
     MULTI_CHANNEL = 0,  // single track file format
@@ -25,10 +26,10 @@ enum MidiEventType {
     CC = 0xB,
     PROGRAM_CHANGE = 0xC,
     AFTERTOUCH = 0xD,
-    PITCH_WHEEL = 0xE,
-    SYSTEM = 0xF
+    PITCH_WHEEL = 0xE
 };
 
+// USELESS for midi files
 enum SystemEventType {
     SYSEX = 0xF0,
     UND0 = 0xF1,
@@ -69,7 +70,7 @@ enum MetaEventType {
     SPECIFIC = 0x7F  // Vendor specific
 };
 
-enum TrackEventType { UNKOWN, MIDI, SYSTEM_EVENT, META, SYSEX_EVENT };
+enum TrackEventType { UNKOWN, MIDI, META, SYSEX_EVENT, SYSTEM_EVENT };
 
 enum MidiError {
     NONE,
@@ -168,6 +169,7 @@ struct MetaEvent {
             case COPYRIGHT:
             case NAME:
             case INSTRUMENT_NAME:
+            case DEVICE_NAME:
             case LYRIC:
             case MARKER:
             case CUE:
@@ -177,10 +179,11 @@ struct MetaEvent {
                 this->data = new u8[cpy.length + 1];
                 std::memcpy(this->data, cpy.data, cpy.length + 1);
                 break;
-            case CC:
             case END_OF_TRACK:
             case SET_TEMPO:
+            case MIDI_CHANNEL_PREFIX:
             case SMPTE_OFFSET:
+            case SEQUENCE_NUMBER:
             case TIME_SIGNATURE:
             case KEY_SIGNATURE:
                 break;
@@ -194,6 +197,7 @@ struct MetaEvent {
             case COPYRIGHT:
             case NAME:
             case INSTRUMENT_NAME:
+            case DEVICE_NAME:
             case LYRIC:
             case MARKER:
             case CUE:
@@ -201,9 +205,10 @@ struct MetaEvent {
             default:
                 mov.data = nullptr;
                 break;
-            case CC:
+            case SEQUENCE_NUMBER:
             case END_OF_TRACK:
             case SET_TEMPO:
+            case MIDI_CHANNEL_PREFIX:
             case SMPTE_OFFSET:
             case TIME_SIGNATURE:
             case KEY_SIGNATURE:
@@ -217,6 +222,7 @@ struct MetaEvent {
             case COPYRIGHT:
             case NAME:
             case INSTRUMENT_NAME:
+            case DEVICE_NAME:
             case LYRIC:
             case MARKER:
             case CUE:
@@ -224,10 +230,11 @@ struct MetaEvent {
             default:
                 delete[] data;
                 break;
-            case CC:
+            case SEQUENCE_NUMBER:
             case END_OF_TRACK:
             case SET_TEMPO:
             case SMPTE_OFFSET:
+            case MIDI_CHANNEL_PREFIX:
             case TIME_SIGNATURE:
             case KEY_SIGNATURE:
                 break;
@@ -242,9 +249,11 @@ struct SysExEvent {
     // + 1 length for the null char
 
     SysExEvent() {}
+    SysExEvent(u8 *data, v_len len) : length(len), data(data) {}
+    SysExEvent(v_len len) : length(len), data(new u8[len + 1]) {}
     SysExEvent(const SysExEvent &cpy)
         : length(cpy.length), data(new u8[cpy.length + 1]) {
-        std::memcpy(data, cpy.data, cpy.length + 1);
+        if (length > 0) std::memcpy(data, cpy.data, cpy.length + 1);
     }
     SysExEvent(SysExEvent &&mov) : length(mov.length) {
         std::swap(mov.data, this->data);
@@ -267,9 +276,16 @@ struct TrackEvent {
 
     TrackEvent() { type = UNKOWN; }
 
-    TrackEvent(const TrackEvent &toCopy) { *this = toCopy; }
+    TrackEvent(struct MidiEvent event, v_len deltaTime = 0, v_len time = 0) {
+        this->type = MIDI;
+        this->deltaTime = deltaTime;
+        this->time = time;
+        this->midi = event;
+    }
 
-    TrackEvent(TrackEvent &&toMove) {}
+    TrackEvent(const TrackEvent &toCopy) : type(UNKOWN) { *this = toCopy; }
+
+    TrackEvent(TrackEvent &&toMove) { *this = std::move(toMove); }
 
     ~TrackEvent() {
         switch (type) {
@@ -312,6 +328,18 @@ struct TrackEvent {
     }
 
     constexpr TrackEvent &operator=(const TrackEvent &e) {
+        switch (type) {
+            case MIDI:
+            case SYSTEM_EVENT:
+            case UNKOWN:
+                break;
+            case META:
+                delete this->meta;
+                break;
+            case SYSEX_EVENT:
+                delete this->sysex;
+                break;
+        }
         deltaTime = e.deltaTime;
         time = e.time;
         type = e.type;
@@ -325,10 +353,10 @@ struct TrackEvent {
             case UNKOWN:
                 break;
             case META:
-                this->meta = new MetaEvent{*e.meta};
+                this->meta = new MetaEvent(*e.meta);
                 break;
             case SYSEX_EVENT:
-                this->sysex = new SysExEvent{*e.sysex};
+                this->sysex = new SysExEvent(*e.sysex);
                 break;
         }
         return *this;
@@ -400,6 +428,8 @@ void computeTimeSignatureMapForTrack(struct MidiFile &file,
 void computeTimingMapForTrack(struct MidiFile &file, struct MidiTrack &track);
 
 // XXX make an operator?
+enum MidiError encodeTrackEvent(const struct TrackEvent &event,
+                                std::stringstream &stream);
 enum MidiError writeMidiFile(struct MidiFile &file, std::ostream &stream);
 
 void printMidiFile(const struct MidiFile &header);

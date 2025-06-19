@@ -20,7 +20,7 @@ bool LoadTextureFromMemory(const void* data, size_t data_size,
     unsigned char* image_data =
         stbi_load_from_memory((const unsigned char*)data, (int)data_size,
                               &image_width, &image_height, NULL, 4);
-    std::cout << data_size << ((image_data == NULL) ? "t":"f") << std::endl;
+    std::cout << data_size << ((image_data == NULL) ? "t" : "f") << std::endl;
     if (image_data == NULL) return false;
 
     // Create a OpenGL texture identifier
@@ -50,8 +50,11 @@ bool LoadTextureFromFile(const char* file_name, GLuint& out_texture,
     int a;
     int image_width = 0;
     int image_height = 0;
-    unsigned char* image_data = stbi_load(file_name, &image_width, &image_height, &a, 4);
-    
+    unsigned char* image_data =
+        stbi_load(file_name, &image_width, &image_height, &a, 4);
+
+    if (!image_data) return false;
+
     // Create a OpenGL texture identifier
     GLuint image_texture;
     glGenTextures(1, &image_texture);
@@ -70,13 +73,16 @@ bool LoadTextureFromFile(const char* file_name, GLuint& out_texture,
     out_texture = image_texture;
     out_width = image_width;
     out_height = image_height;
-    return out_texture != 0;
+    return out_texture != 0 && image_width != 0 && image_height != 0;
 }
 
 void ResourceManager::load() {
     for (std::pair<const std::string, Texture>& p : this->textures) {
         Texture& t = p.second;
         t.loaded = LoadTextureFromFile(t.path, t.tex, t.w, t.h);
+        if (!t.loaded) {
+            std::cerr << "Could not load file : " << p.second.path << std::endl;
+        }
     }
 }
 

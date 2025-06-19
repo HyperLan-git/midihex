@@ -65,7 +65,7 @@ enum MidiError decodeMidiMessage(u8*& readData, u8* end, struct TrackEvent& e,
     u8* data = readData;
     const u8 b = currentEventType;
     const u8 t1 = b >> 4;
-    if (t1 >= NOTE_OFF && t1 < SYSTEM) {
+    if (t1 >= NOTE_OFF && t1 <= PITCH_WHEEL) {
         e.type = MIDI;
         e.midi.channel = b & 0xF;
         e.midi.type = t1;
@@ -439,13 +439,114 @@ enum MidiError readMidiFile(u8* data, std::size_t length,
 
 inline void feedDeltaTime(v_len deltaTime, std::stringstream& stream) {
     char dat;
-    if (deltaTime > 1 << (7 * 3))
+    if (deltaTime >= 1 << (7 * 3))
         WRITE_CHAR(stream, ((deltaTime >> 21) & 0x7F) | 0x80);
-    if (deltaTime > 1 << (7 * 2))
+    if (deltaTime >= 1 << (7 * 2))
         WRITE_CHAR(stream, ((deltaTime >> 14) & 0x7F) | 0x80);
-    if (deltaTime > 1 << 7)
+    if (deltaTime >= 1 << 7)
         WRITE_CHAR(stream, ((deltaTime >> 7) & 0x7F) | 0x80);
     WRITE_CHAR(stream, deltaTime & 0x7F);
+}
+
+enum MidiError encodeTrackEvent(const struct TrackEvent& event,
+                                std::stringstream& data) {
+    char dat;
+    feedDeltaTime(event.deltaTime, data);
+    switch (event.type) {
+        case MIDI:
+            WRITE_CHAR(data, (event.midi.type << 4) | event.midi.channel);
+            WRITE_CHAR(data, event.midi.data0);
+            switch (event.midi.type) {
+                default:
+                    WRITE_CHAR(data, event.midi.data1);
+                    break;
+                case PROGRAM_CHANGE:
+                case AFTERTOUCH:
+                    break;
+            }
+            break;
+        case SYSTEM_EVENT:
+            WRITE_CHAR(data, event.sys.type);
+            switch (event.sys.type) {
+                case UND0:
+                case UND1:
+                case UND2:
+                case TUNE:
+                    break;
+                case SONG_POSITION:
+                    WRITE_CHAR(data, event.sys.data0);
+                    WRITE_CHAR(data, event.sys.data1);
+                    break;
+                case SONG_SELECT:
+                    WRITE_CHAR(data, event.sys.data0);
+                    break;
+            }
+            break;
+        case META:
+            WRITE_CHAR(data, 0xFF);
+            WRITE_CHAR(data, event.meta->type);
+            switch (event.meta->type) {
+                case SEQUENCE_NUMBER:
+                    WRITE_CHAR(data, 0x02);
+                    WRITE_BIG_ENDIAN_U16(data, event.meta->seqNumber);
+                    break;
+                case MIDI_CHANNEL_PREFIX:
+                    WRITE_CHAR(data, 0x01);
+                    WRITE_CHAR(data, event.meta->channel);
+                    break;
+                case END_OF_TRACK:
+                    WRITE_CHAR(data, 0x00);
+                    break;
+                case SET_TEMPO:
+                    WRITE_CHAR(data, 0x03);
+                    WRITE_BIG_ENDIAN_U24(data, event.meta->MPQ);
+                    break;
+                case SMPTE_OFFSET:
+                    WRITE_CHAR(data, 0x05);
+                    WRITE_CHAR(data, event.meta->startTime.hours);
+                    WRITE_CHAR(data, event.meta->startTime.minutes);
+                    WRITE_CHAR(data, event.meta->startTime.seconds);
+                    WRITE_CHAR(data, event.meta->startTime.frames);
+                    WRITE_CHAR(data, event.meta->startTime.frameFractions);
+                    break;
+                case TIME_SIGNATURE:
+                    WRITE_CHAR(data, 0x04);
+                    WRITE_CHAR(data, event.meta->timeSignature.numerator);
+                    WRITE_CHAR(data, event.meta->timeSignature.denominator);
+                    WRITE_CHAR(data, event.meta->timeSignature.TPM);
+                    WRITE_CHAR(data, event.meta->timeSignature.noteDivision);
+                    break;
+                case KEY_SIGNATURE:
+                    WRITE_CHAR(data, 0x02);
+                    WRITE_CHAR(data, event.meta->key.sharps);
+                    WRITE_CHAR(data, event.meta->key.minor);
+                    break;
+                case TEXT:
+                case COPYRIGHT:
+                case NAME:
+                case INSTRUMENT_NAME:
+                case LYRIC:
+                case MARKER:
+                case CUE:
+                case SPECIFIC:
+                case SYSEX_END:
+                default:
+                    feedDeltaTime(event.meta->length, data);
+                    data.write((char*)event.meta->data, event.meta->length);
+                    break;
+            }
+            break;
+        case SYSEX_EVENT:
+            WRITE_CHAR(data, 0xF0);
+            // data contains the final 0xF7
+            data.write((char*)event.sysex->data, event.sysex->length);
+            break;
+        case UNKOWN:
+            break;
+        default:
+            return INVALID_EVENT;
+    }
+    return NONE;
 }
 
 // FIXME implement running status (consecutive same type events compression)
@@ -456,105 +557,8 @@ enum MidiError encodeMidiTrack(struct MidiTrack& track) {
     std::string s(len, '\0');
     std::stringstream data(s);
 
-    char dat;
-
     for (TrackEvent& event : track.list) {
-        feedDeltaTime(event.deltaTime, data);
-        switch (event.type) {
-            case MIDI:
-                WRITE_CHAR(data, (event.midi.type << 4) | event.midi.channel);
-                WRITE_CHAR(data, event.midi.data0);
-                switch (event.midi.type) {
-                    default:
-                        WRITE_CHAR(data, event.midi.data1);
-                        break;
-                    case PROGRAM_CHANGE:
-                    case AFTERTOUCH:
-                        break;
-                }
-                break;
-            case SYSTEM_EVENT:
-                WRITE_CHAR(data, event.sys.type);
-                switch (event.sys.type) {
-                    case UND0:
-                    case UND1:
-                    case UND2:
-                    case TUNE:
-                        break;
-                    case SONG_POSITION:
-                        WRITE_CHAR(data, event.sys.data0);
-                        WRITE_CHAR(data, event.sys.data1);
-                        break;
-                    case SONG_SELECT:
-                        WRITE_CHAR(data, event.sys.data0);
-                        break;
-                }
-                break;
-            case META:
-                WRITE_CHAR(data, 0xFF);
-                WRITE_CHAR(data, event.meta->type);
-                switch (event.meta->type) {
-                    case SEQUENCE_NUMBER:
-                        WRITE_CHAR(data, 0x02);
-                        WRITE_BIG_ENDIAN_U16(data, event.meta->seqNumber);
-                        break;
-                    case MIDI_CHANNEL_PREFIX:
-                        WRITE_CHAR(data, 0x01);
-                        WRITE_CHAR(data, event.meta->channel);
-                        break;
-                    case END_OF_TRACK:
-                        WRITE_CHAR(data, 0x00);
-                        break;
-                    case SET_TEMPO:
-                        WRITE_CHAR(data, 0x03);
-                        WRITE_BIG_ENDIAN_U24(data, event.meta->MPQ);
-                        break;
-                    case SMPTE_OFFSET:
-                        WRITE_CHAR(data, 0x05);
-                        WRITE_CHAR(data, event.meta->startTime.hours);
-                        WRITE_CHAR(data, event.meta->startTime.minutes);
-                        WRITE_CHAR(data, event.meta->startTime.seconds);
-                        WRITE_CHAR(data, event.meta->startTime.frames);
-                        WRITE_CHAR(data, event.meta->startTime.frameFractions);
-                        break;
-                    case TIME_SIGNATURE:
-                        WRITE_CHAR(data, 0x04);
-                        WRITE_CHAR(data, event.meta->timeSignature.numerator);
-                        WRITE_CHAR(data, event.meta->timeSignature.denominator);
-                        WRITE_CHAR(data, event.meta->timeSignature.TPM);
-                        WRITE_CHAR(data,
-                                   event.meta->timeSignature.noteDivision);
-                        break;
-                    case KEY_SIGNATURE:
-                        WRITE_CHAR(data, 0x02);
-                        WRITE_CHAR(data, event.meta->key.sharps);
-                        WRITE_CHAR(data, event.meta->key.minor);
-                        break;
-                    case TEXT:
-                    case COPYRIGHT:
-                    case NAME:
-                    case INSTRUMENT_NAME:
-                    case LYRIC:
-                    case MARKER:
-                    case CUE:
-                    case SPECIFIC:
-                    case SYSEX_END:
-                    default:
-                        feedDeltaTime(event.meta->length, data);
-                        data.write((char*)event.meta->data, event.meta->length);
-                        break;
-                }
-                break;
-            case SYSEX_EVENT:
-                WRITE_CHAR(data, 0xF0);
-                // data contains the final 0xF7
-                data.write((char*)event.sysex->data, event.sysex->length);
-                break;
-            case UNKOWN:
-                break;
-            default:
-                return INVALID_EVENT;
-        }
+        encodeTrackEvent(event, data);
     }
 
     data.seekg(0, std::ios::end);
@@ -640,7 +644,6 @@ void printMidiTrackEvent(const struct TrackEvent& event) {
                                        ((u16)(event.midi.data1) << 7))
                               << "\n";
                     break;
-                case SYSTEM:
                 default:
                     std::cout << "type = MIDI 0x" << std::hex << event.midi.type
                               << std::dec << "\n";

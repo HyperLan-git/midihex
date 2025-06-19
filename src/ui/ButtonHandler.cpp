@@ -19,6 +19,7 @@ void ButtonHandler::registerAll(Editor* editor) {
         }
     });
     this->registerButton("Save", [=]() {
+        if (!editor->getData()) return;
         std::string selection =
             pfd::save_file("Save as", ".",
                            {"Midi File", "*.mid *.MID", "All Files", "*"})
@@ -27,4 +28,7 @@ void ButtonHandler::registerAll(Editor* editor) {
         editor->saveFile(selection);
     });
     this->registerButton("Track editor", [=]() { editor->openTrackEditor(); });
+    this->registerButton("Add event", [=]() { editor->openAddEventEditor(); });
+    this->registerButton("Remove event",
+                         [=]() { editor->deleteSelectedEvent(); });
 }
