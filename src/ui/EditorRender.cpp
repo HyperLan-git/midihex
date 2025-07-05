@@ -457,7 +457,10 @@ void Editor::renderTrackEditor(std::shared_ptr<MidiFile>& data) {
         ImGui::PushID(i);
         if (ImGui::TableNextColumn()) ImGui::Text("%d", i + 1);
         if (ImGui::TableNextColumn()) {
-            ImGui::Text("%lu", data->data[i].list.size());
+            if (sizeof(unsigned long long) == sizeof(std::size_t))
+                ImGui::Text("%llu", (unsigned long long)data->data[i].list.size());
+            else
+                ImGui::Text("%lu", (unsigned long)data->data[i].list.size());
         }
         if (ImGui::TableNextColumn()) {
             if (ImGui::Button("View")) {
