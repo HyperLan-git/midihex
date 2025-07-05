@@ -19,6 +19,7 @@
 #include "ResourceManager.hpp"
 
 // FIXME split this into multiple classes with references to main class' data
+// TODO stop mixing logic and frontend as much
 class Editor {
    public:
     Editor();
@@ -61,6 +62,8 @@ class Editor {
 
     void addEvent(u16 track, u32 pos, const TrackEvent& e);
     void removeEvent(u16 track, u32 pos);
+    void addTrack(u16 idx);
+    void removeTrack(u16 idx);
 
     void deleteSelectedEvent() {
         removeEvent(this->selectedTrack, this->selectedEvent);
@@ -90,6 +93,8 @@ class Editor {
 
     bool addEventEditorOpen = false;
     u32 selectedTrack = 0, selectedEvent = 0;
+
+    bool tempoHasChanged = false, timeSignatureHasChanged = false;
 
     std::string error;
 

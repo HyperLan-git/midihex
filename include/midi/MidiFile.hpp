@@ -308,10 +308,10 @@ struct TrackEvent {
 
         switch (type) {
             case MIDI:
-                this->midi = e.midi;
+                this->midi = std::move(e.midi);
                 break;
             case SYSTEM_EVENT:
-                this->sys = e.sys;
+                this->sys = std::move(e.sys);
                 break;
             case UNKOWN:
                 break;
@@ -370,6 +370,22 @@ struct MidiTrack {
     // TODO fix that thing
     u8 *data;  // Not owned
     std::vector<TrackEvent> list;
+
+    MidiTrack() : length(0), decoded(false), data(NULL) {}
+
+    MidiTrack(MidiTrack &&t)
+        : length(t.length),
+          decoded(t.decoded),
+          data(t.data),
+          list(std::move(t.list)) {}
+
+    MidiTrack &operator=(MidiTrack &&t) {
+        this->length = t.length;
+        this->decoded = t.decoded;
+        this->data = t.data;
+        this->list = std::move(t.list);
+        return *this;
+    }
 };
 
 struct TempoChange {

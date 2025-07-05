@@ -57,7 +57,26 @@ void Editor::load() {
     buttonHandler.registerAll(this);
 }
 
-void Editor::update() { this->buttonHandler.runAll(); }
+void Editor::update() {
+    this->buttonHandler.runAll();
+
+    if (tempoHasChanged) {
+        data->timingInfo.clear();
+
+        for (u32 j = 0; j < data->tracks; j++) {
+            computeTimeMapsForTrack(*data, data->data[j]);
+        }
+        tempoHasChanged = false;
+    }
+    if (timeSignatureHasChanged) {
+        data->timeSignatureInfo.clear();
+
+        for (u32 j = 0; j < data->tracks; j++) {
+            computeTimeSignatureMapForTrack(*data, data->data[j]);
+        }
+        timeSignatureHasChanged = false;
+    }
+}
 
 constexpr ImGuiWindowFlags MAIN_WINDOW_FLAGS = ImGuiWindowFlags_NoCollapse |
                                                ImGuiWindowFlags_NoResize |
@@ -110,6 +129,7 @@ void Editor::render() {
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
+
     ImGui::NewFrame();
     ImGui::GetFont()->Scale = 1.5f;
 
@@ -127,11 +147,11 @@ void Editor::render() {
     else if (addEventEditorOpen && data)
         ImGui::OpenPopup("Event add editor");
 
+    renderError();
+
     renderTrackEditor(data);
 
     renderEventAddEditor(data);
-
-    renderError();
 
     renderApplicationBar();
 
@@ -223,11 +243,9 @@ void Editor::addEvent(u16 track, u32 pos, const TrackEvent& e) {
     this->totalEvents++;
     if (e.type == META) {
         if (e.meta->type == SET_TEMPO) {
-            for (u16 i = 0; i < data->tracks; i++)
-                computeTimingMapForTrack(*data, data->data[i]);
+            this->tempoHasChanged = true;
         } else if (e.meta->type == TIME_SIGNATURE) {
-            for (u16 i = 0; i < data->tracks; i++)
-                computeTimeSignatureMapForTrack(*data, data->data[i]);
+            this->timeSignatureHasChanged = true;
         }
     }
     computeTimes(eList);
@@ -239,18 +257,61 @@ void Editor::removeEvent(u16 track, u32 pos) {
     MidiTrack& t = data->data[track];
     std::vector<TrackEvent>& eList = t.list;
     const TrackEvent e(eList[pos]);
+    if (e.type == META && e.meta->type == END_OF_TRACK) {
+        this->showError(
+            "Cannot delete an end of track event !\n"
+            "Delete the track instead !");
+        return;
+    }
     eList.erase(eList.cbegin() + pos);
     this->totalEvents--;
     if (e.type == META) {
         if (e.meta->type == SET_TEMPO) {
-            for (u16 i = 0; i < data->tracks; i++)
-                computeTimingMapForTrack(*data, t);
+            this->tempoHasChanged = true;
         } else if (e.meta->type == TIME_SIGNATURE) {
-            for (u16 i = 0; i < data->tracks; i++)
-                computeTimeSignatureMapForTrack(*data, t);
+            this->timeSignatureHasChanged = true;
         }
     }
     computeTimes(eList);
+}
+
+void Editor::addTrack(u16 idx) {
+    std::shared_ptr<MidiFile> data = getData();
+    if (!data) return;
+    MidiTrack* old = data->data;
+    // TODO use new move constructor
+    data->data = new MidiTrack[data->tracks + 1];
+    for (u16 i = 0; i < data->tracks + 1; i++) {
+        if (i < idx && i < data->tracks)
+            data->data[i] = std::move(old[i]);
+        else if (i == idx || i == data->tracks) {
+            data->data[i].decoded = true;
+            data->data[i].data = NULL;
+            data->data[i].length = 0;
+            data->data[i].list = std::vector<TrackEvent>();
+
+            TrackEvent endTrack;
+            endTrack.deltaTime = 0;
+            endTrack.time = 0;
+            endTrack.type = META;
+            endTrack.meta = new MetaEvent(END_OF_TRACK);
+
+            data->data[i].list.push_back(endTrack);
+        } else
+            data->data[i] = std::move(old[i - 1]);
+    }
+
+    delete[] old;
+    data->tracks++;
+}
+
+void Editor::removeTrack(u16 idx) {
+    std::shared_ptr<MidiFile> data = getData();
+    if (!data) return;
+    data->tracks--;
+    for (u16 i = idx; i < data->tracks; i++) {
+        data->data[i] = std::move(data->data[i + 1]);
+    }
 }
 
 Editor::~Editor() {

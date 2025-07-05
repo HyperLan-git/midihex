@@ -205,12 +205,17 @@ void Editor::renderEventAddEditor(std::shared_ptr<MidiFile>& data) {
     buffer.type = getTrackEventType(buf + 1);
 
     constexpr char MIDI_TYPES[] =
-        "NOTE ON\0NOTE OFF\0POLYPHONIC AFTERTOUCH\0"
-        "MIDI CC\0AFTERTOUCH\0PITCH WHEEL\0";
+        "NOTE OFF\0NOTE ON\0POLYPHONIC AFTERTOUCH\0"
+        "MIDI CC\0PROGRAM CHANGE\0AFTERTOUCH\0PITCH WHEEL\0";
     constexpr char META_TYPES[] =
         "SEQUENCE NUMBER\0TEXT\0COPYRIGHT\0NAME\0INSTRUMENT "
         "NAME\0LYRIC\0MARKER\0CUE\0DEVICE NAME\0MIDI CHANNEL PREFIX\0SET "
         "TEMPO\0SMPTE OFFSET\0TIME SIGNATURE\0KEY SIGNATURE\0VENDOR SPECIFIC\0";
+
+    constexpr char MIDI_EVENTS_PARAMETERS[][2][11] = {
+        {"note", "velocity"},    {"note", "velocity"}, {"note", "pressure"},
+        {"controller", "value"}, {"program", "empty"}, {"value", "empty"},
+        {"LSB", "MSB"}};
 
     int w;
     bool b;
@@ -228,7 +233,7 @@ void Editor::renderEventAddEditor(std::shared_ptr<MidiFile>& data) {
 
             ImGui::SetNextItemWidth(100);
             v = buffer.midi.data0;
-            changed |= ImGui::InputInt("data0", &v);
+            changed |= ImGui::InputInt(MIDI_EVENTS_PARAMETERS[w][0], &v);
             buffer.midi.data0 = std::clamp(v, 0, 0x7F);
 
             ImGui::SameLine();
@@ -238,10 +243,10 @@ void Editor::renderEventAddEditor(std::shared_ptr<MidiFile>& data) {
             if (buffer.midi.type == PROGRAM_CHANGE ||
                 buffer.midi.type == AFTERTOUCH) {
                 ImGui::BeginDisabled();
-                changed |= ImGui::InputInt("data1", &v);
+                changed |= ImGui::InputInt(MIDI_EVENTS_PARAMETERS[w][1], &v);
                 ImGui::EndDisabled();
             } else {
-                changed |= ImGui::InputInt("data1", &v);
+                changed |= ImGui::InputInt(MIDI_EVENTS_PARAMETERS[w][1], &v);
             }
             buffer.midi.data1 = std::clamp(v, 0, 0x7F);
 
@@ -424,8 +429,11 @@ void Editor::renderTrackEditor(std::shared_ptr<MidiFile>& data) {
     if (!ImGui::BeginPopupModal("Track editor", &this->trackEditorOpen)) {
         return;
     }
+    if (ImGui::Button("Add")) {
+        this->addTrack(data->tracks);
+    }
 
-    constexpr char COLS[][16] = {"Track number", "Open", "Move"};
+    constexpr char COLS[][13] = {"Track number", "Events", "Open", "Move"};
     constexpr int N_COLS = sizeof(COLS) / sizeof(COLS[0]);
     constexpr ImGuiTableFlags tableFlags =
         ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Borders |
@@ -449,22 +457,33 @@ void Editor::renderTrackEditor(std::shared_ptr<MidiFile>& data) {
         ImGui::PushID(i);
         if (ImGui::TableNextColumn()) ImGui::Text("%d", i + 1);
         if (ImGui::TableNextColumn()) {
+            ImGui::Text("%lu", data->data[i].list.size());
+        }
+        if (ImGui::TableNextColumn()) {
             if (ImGui::Button("View")) {
                 this->showAllTracks = false;
                 this->trackToShow = i + 1;
             }
         }
         if (ImGui::TableNextColumn()) {
-            if (ImGui::Button("^")) {
-                std::cout << "move up\n";
-                ImGui::CloseCurrentPopup();
-                this->showError("Not implemented");
+            if (i == 0) ImGui::BeginDisabled();
+            if (ImGui::Button("^") && i > 0) {
+                std::swap(data->data[i - 1], data->data[i]);
             }
+            if (i == 0) ImGui::EndDisabled();
             ImGui::SameLine();
-            if (ImGui::Button("v")) {
-                std::cout << "move down\n";
-                ImGui::CloseCurrentPopup();
-                this->showError("Not implemented");
+            if (i + 1 == data->tracks) ImGui::BeginDisabled();
+            if (ImGui::Button("v") && i + 1 < data->tracks) {
+                std::swap(data->data[i + 1], data->data[i]);
+            }
+            if (i + 1 == data->tracks) ImGui::EndDisabled();
+            ImGui::SameLine();
+            if (ImGui::Button("del")) {
+                if (data->tracks == 1) {
+                    this->trackEditorOpen = false;
+                    this->showError("Cannot delete the last track in a file !");
+                } else
+                    this->removeTrack(i);
             }
         }
         ImGui::PopID();
@@ -555,7 +574,7 @@ void Editor::renderParams(std::shared_ptr<MidiFile>& data) {
         ImGui::EndDisabled();
     } else {
         ImGui::InputInt("Track", &k, 1, 5);
-        this->trackToShow = std::clamp(k, 0, (int)data->tracks);
+        this->trackToShow = std::clamp(k, 1, (int)data->tracks);
     }
     ImGui::End();
 }
@@ -594,7 +613,6 @@ void Editor::renderTable(std::shared_ptr<MidiFile>& data) {
     ImGui::TableHeadersRow();
     u64 remaining = this->eventTableSize;
     u32 o = offset;
-    bool tempoChanged = false, timeSignatureChanged = false;
     const TempoChange defaultTempo =
         TempoChange{.time = 0,
                     .timeMicros = 0,
@@ -608,6 +626,7 @@ void Editor::renderTable(std::shared_ptr<MidiFile>& data) {
             continue;
         }
 
+        bool changeDT = false;
         std::vector<TempoChange>::const_iterator t = data->timingInfo.cbegin();
         for (u32 i = o; i < track.list.size(); i++) {
             o = 0;
@@ -627,7 +646,11 @@ void Editor::renderTable(std::shared_ptr<MidiFile>& data) {
                                            0x802222FF);
                 }
             }
-            if (ImGui::TableNextColumn()) ImGui::Text("%u", message.deltaTime);
+            if (ImGui::TableNextColumn()) {
+                int v = message.deltaTime;
+                changeDT |= ImGui::InputInt("##deltatime", &v);
+                message.deltaTime = std::clamp(v, 0, 0xFFFFFF);
+            }
             if (ImGui::TableNextColumn()) ImGui::Text("%u", message.time);
             // TODO put those computations in update() if optimisation
             // needed
@@ -651,10 +674,10 @@ void Editor::renderTable(std::shared_ptr<MidiFile>& data) {
                 bool changed = printDataTextForTrackEvent(message);
                 if (changed && message.type == META &&
                     message.meta->type == SET_TEMPO) {
-                    tempoChanged = true;
+                    tempoHasChanged = true;
                 } else if (changed && message.type == META &&
                            message.meta->type == TIME_SIGNATURE) {
-                    timeSignatureChanged = true;
+                    timeSignatureHasChanged = true;
                 }
             }
 
@@ -674,29 +697,19 @@ void Editor::renderTable(std::shared_ptr<MidiFile>& data) {
             if (--remaining == 0) break;
         }
         if (remaining == 0) break;
-        ImGui::PushID(j + this->totalEvents);
+        ImGui::PushID(j + this->totalEvents + 1);
         ImGui::TableHeadersRow();
         ImGui::PopID();
+
+        if (changeDT) {
+            computeTimes(track.list);
+        }
     }
 
     ImGui::PushID(1);
     ImGui::TableHeadersRow();
     ImGui::PopID();
-    // TODO move that to update()
-    if (tempoChanged) {
-        data->timingInfo.clear();
 
-        for (u32 j = 0; j < data->tracks; j++) {
-            computeTimeMapsForTrack(*data, data->data[j]);
-        }
-    }
-    if (timeSignatureChanged) {
-        data->timeSignatureInfo.clear();
-
-        for (u32 j = 0; j < data->tracks; j++) {
-            computeTimeSignatureMapForTrack(*data, data->data[j]);
-        }
-    }
     ImGui::EndTable();
     ImGui::End();
 }

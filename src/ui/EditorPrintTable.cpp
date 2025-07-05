@@ -181,7 +181,7 @@ bool Editor::printDataTextForTrackEvent(TrackEvent& ev) {
                     ImGui::PushItemWidth(WIDTH);
                     changed |= ImGui::InputInt("channel", &i, 1, 8);
                     ImGui::SameLine();
-                    ImGui::PushItemWidth(WIDTH);
+                    ImGui::PushItemWidth(WIDTH * 1.5);
                     changed |= ImGui::InputInt("value", &j, 1, 32);
                     ev.midi.channel = std::clamp(i, 0, 15);
                     j += 0x2000;

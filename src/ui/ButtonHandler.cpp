@@ -6,8 +6,30 @@
 #include "portable-file-dialogs.h"
 
 void ButtonHandler::registerAll(Editor* editor) {
-    this->registerButton(
-        "New", [=]() { editor->setData(std::shared_ptr<MidiFile>()); });
+    this->registerButton("New", [=]() {
+        std::shared_ptr<MidiFile> file = std::make_shared<MidiFile>();
+        file->data = new MidiTrack[1];
+        file->division = 24;
+        file->format = 0;
+        file->length = 6;
+        file->tracks = 1;
+        file->data->decoded = true;
+        file->data->data = NULL;
+        file->data->length = 0;
+        file->data->list = std::vector<TrackEvent>();
+
+        TrackEvent endTrack;
+        endTrack.deltaTime = 0;
+        endTrack.time = 0;
+        endTrack.type = META;
+        endTrack.meta = new MetaEvent(END_OF_TRACK);
+
+        file->data->list.push_back(endTrack);
+
+        computeTimeMapsForTrack(*file, file->data[0]);
+
+        editor->setData(file);
+    });
     this->registerButton("Load", [=]() {
         std::vector<std::string> selection =
             pfd::open_file("Select a file", ".",
@@ -24,7 +46,6 @@ void ButtonHandler::registerAll(Editor* editor) {
             pfd::save_file("Save as", ".",
                            {"Midi File", "*.mid *.MID", "All Files", "*"})
                 .result();
-        std::cout << "Selected file: " << selection << "\n";
         editor->saveFile(selection);
     });
     this->registerButton("Track editor", [=]() { editor->openTrackEditor(); });
