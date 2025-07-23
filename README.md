@@ -7,3 +7,6 @@ My original motivation for making this was precisely controlling the tempo data 
 Just use `make`. You will need imgui cloned in the parent folder on branch *docking* and opengl + glfw installed.
 
 The binary will be found as *bin/midihex*.
+
+## Example image
+![Image](https://github.com/HyperLan-git/midihex/blob/main/screenshot.png)
