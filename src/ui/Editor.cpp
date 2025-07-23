@@ -4,9 +4,7 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "portable-file-dialogs.h"
-
-Editor::Editor() {
+Editor::Editor() : toolStrip(*this, resourceManager, buttonHandler) {
     glfwSetErrorCallback([](int error, const char* description) {
         std::cerr << "GLFW Error " << error << ": " << description << std::endl;
     });
@@ -44,14 +42,6 @@ Editor::Editor() {
 }
 
 void Editor::load() {
-    resourceManager.addTexture("new_icon", "./resources/images/New.png");
-    resourceManager.addTexture("load_icon", "./resources/images/Load.png");
-    resourceManager.addTexture("save_icon", "./resources/images/Save.png");
-    resourceManager.addTexture("add_event_icon",
-                               "./resources/images/MidiAdd.png");
-    resourceManager.addTexture("remove_event_icon",
-                               "./resources/images/MidiSub.png");
-
     resourceManager.load();
 
     buttonHandler.registerAll(this);
@@ -153,7 +143,7 @@ void Editor::render() {
 
     renderEventAddEditor(data);
 
-    renderApplicationBar();
+    this->toolStrip.render();
 
     renderFileParams(data);
     renderTable(data);

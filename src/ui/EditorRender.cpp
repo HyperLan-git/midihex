@@ -8,43 +8,6 @@ inline void createImageButton(const std::string& id, ButtonHandler& handler,
     }
 }
 
-void Editor::renderApplicationBar() {
-    constexpr ImGuiWindowFlags flags =
-        ImGuiWindowFlags_NoResize | ImGuiWindowFlags_HorizontalScrollbar;
-    constexpr ImVec2 sz = {500, 100};
-    ImGui::SetNextWindowSize(sz, ImGuiCond_Once);
-    if (!ImGui::Begin("Tools", NULL, flags)) {
-        ImGui::End();
-        return;
-    }
-    if (ImGui::GetWindowDockNode() == NULL) ImGui::SetWindowSize(sz);
-    ImVec2 szTools = ImGui::GetWindowSize();
-
-    const Texture &newIcon = this->resourceManager.getTexture("new_icon"),
-                  &loadIcon = this->resourceManager.getTexture("load_icon"),
-                  &saveIcon = this->resourceManager.getTexture("save_icon"),
-                  &addMidiIcon =
-                      this->resourceManager.getTexture("add_event_icon"),
-                  &removeMidiIcon =
-                      this->resourceManager.getTexture("remove_event_icon");
-
-    createImageButton("New", this->buttonHandler, newIcon);
-
-    if (szTools.x >= newIcon.w * 3) ImGui::SameLine();
-    createImageButton("Load", this->buttonHandler, loadIcon);
-
-    if (szTools.x >= newIcon.w * 4) ImGui::SameLine();
-    createImageButton("Save", this->buttonHandler, saveIcon);
-
-    if (szTools.x >= newIcon.w * 5) ImGui::SameLine();
-    createImageButton("Add event", this->buttonHandler, addMidiIcon);
-
-    if (szTools.x >= newIcon.w * 6) ImGui::SameLine();
-    createImageButton("Remove event", this->buttonHandler, removeMidiIcon);
-
-    ImGui::End();
-}
-
 #pragma region ADD_EVENT_EDITOR
 
 // TODO maybe put all these in the caller's responsibility or in a new class

@@ -9,7 +9,13 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-ResourceManager::ResourceManager() {}
+ResourceManager::ResourceManager() {
+    addTexture("new_icon", "./resources/images/New.png");
+    addTexture("load_icon", "./resources/images/Load.png");
+    addTexture("save_icon", "./resources/images/Save.png");
+    addTexture("add_event_icon", "./resources/images/MidiAdd.png");
+    addTexture("remove_event_icon", "./resources/images/MidiSub.png");
+}
 
 bool LoadTextureFromMemory(const void* data, size_t data_size,
                            GLuint& out_texture, int& out_width,

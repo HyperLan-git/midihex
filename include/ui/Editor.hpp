@@ -17,6 +17,7 @@
 #include "ButtonHandler.hpp"
 #include "MidiFile.hpp"
 #include "ResourceManager.hpp"
+#include "ToolStrip.hpp"
 
 // FIXME split this into multiple classes with references to main class' data
 // TODO stop mixing logic and frontend as much
@@ -89,6 +90,8 @@ class Editor {
 
     ResourceManager resourceManager;
 
+    ToolStrip toolStrip;
+
     bool trackEditorOpen = false;
 
     bool addEventEditorOpen = false;
@@ -104,7 +107,6 @@ class Editor {
     void renderFileParams(std::shared_ptr<MidiFile>& data);
     void renderTable(std::shared_ptr<MidiFile>& data);
     void renderParams(std::shared_ptr<MidiFile>& data);
-    void renderApplicationBar();
     void renderTrackEditor(std::shared_ptr<MidiFile>& data);
     void renderEventAddEditor(std::shared_ptr<MidiFile>& data);
     void renderError();
