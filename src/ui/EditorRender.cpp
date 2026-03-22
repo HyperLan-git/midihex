@@ -179,12 +179,13 @@ void Editor::renderEventAddEditor(std::shared_ptr<MidiFile>& data) {
         {"note", "velocity"},    {"note", "velocity"}, {"note", "pressure"},
         {"controller", "value"}, {"program", "empty"}, {"value", "empty"},
         {"LSB", "MSB"}};
+    constexpr size_t MIDI_EVENTS_LENGTH = sizeof(MIDI_EVENTS_PARAMETERS) / sizeof(MIDI_EVENTS_PARAMETERS[0]);
 
     int w;
     bool b;
     switch (buffer.type) {
         case MIDI:
-            w = buffer.midi.type - NOTE_OFF;
+            w = std::clamp<size_t>(buffer.midi.type - NOTE_OFF, 0, MIDI_EVENTS_LENGTH - 1);
             ImGui::SetNextItemWidth(200);
             changed |= ImGui::Combo("Channel event type", &w, MIDI_TYPES);
             buffer.midi.type = w + NOTE_OFF;
@@ -614,6 +615,8 @@ void Editor::renderTable(std::shared_ptr<MidiFile>& data) {
             }
             if (ImGui::TableNextColumn()) {
                 int v = message.deltaTime;
+                // The width is automatic this way
+                ImGui::SetNextItemWidth(-FLT_MIN);
                 changeDT |= ImGui::InputInt("##deltatime", &v);
                 message.deltaTime = std::clamp(v, 0, 0xFFFFFF);
             }
@@ -649,7 +652,7 @@ void Editor::renderTable(std::shared_ptr<MidiFile>& data) {
 
             constexpr ImGuiSelectableFlags selectable_flags =
                 ImGuiSelectableFlags_SpanAllColumns |
-                ImGuiSelectableFlags_AllowItemOverlap;
+                ImGuiSelectableFlags_AllowOverlap;
             ImGui::SameLine();
             if (ImGui::Selectable(
                     "", this->selectedEvent == i && selectedTrack == j,
