@@ -12,14 +12,12 @@
     in
     {
         devShells.${system}.default = pkgs.mkShell {
-            name = "midihex dev";
             buildInputs = with pkgs; [
-                pkgs.gnumake
-                pkgs.gcc
-
-                pkgs.glfw3
-                pkgs.imgui
+                hello
             ];
+            shellHook = ''
+                echo "Welcome to the devShell!"
+            '';
         };
     };
 }
