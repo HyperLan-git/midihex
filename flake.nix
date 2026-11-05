@@ -31,6 +31,7 @@
 
             shellHook = ''
                 echo "Welcome to the devShell!"
+                echo "Use make to compile the project and make DEBUG=1 to add asan"
             '';
         };
     };
