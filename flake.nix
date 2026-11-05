@@ -10,21 +10,13 @@
         pkgs = import nixpkgs { inherit system; };
 
     in {
-        devShells.${system} = {
-            simple = pkgs.mkShell {
-                packages = [ pkgs.midihex ];
-                shellHook = ''
-                    ${pkgs.midihex}/bin/hello
-                '';
-            };
-        };
-        default = pkgs.mkShell {
-            packages = [
-                pkgs.gnumake
-                pkgs.gcc
+        devShells.default = pkgs.mkShell {
+            buildInputs = [
+                gnumake
+                gcc
 
-                pkgs.glfw3
-                pkgs.imgui
+                glfw3
+                imgui
             ];
         };
     };
