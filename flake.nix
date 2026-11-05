@@ -5,11 +5,7 @@
         nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     };
 
-    outputs = {nixpkgs, ...}: let
-        system = "x86_64-linux";
-        pkgs = import nixpkgs { inherit system; };
-
-    in {
+    outputs = {self, nixpkgs, ...}: {
         devShells.default = pkgs.mkShell {
             buildInputs = [
                 pkgs.gnumake
