@@ -12,11 +12,11 @@
     in {
         devShells.default = pkgs.mkShell {
             buildInputs = [
-                gnumake
-                gcc
+                pkgs.gnumake
+                pkgs.gcc
 
-                glfw3
-                imgui
+                pkgs.glfw3
+                pkgs.imgui
             ];
         };
     };
