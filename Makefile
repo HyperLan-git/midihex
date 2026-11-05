@@ -15,7 +15,9 @@
 #CXX = clang++
 
 EXE = bin/midihex
+ifndef IMGUI_DIR
 IMGUI_DIR = ../imgui
+endif
 OBJDIR = bin/obj
 INCLUDEFOLDER = include
 SRCFOLDER = src
