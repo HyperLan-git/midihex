@@ -18,6 +18,23 @@
         };
     in
     {
+        packages.${system}.default = pkgs.stdenv.mkDerivation {
+            pname = "midihex";
+            version = "0.1.0";
+            src = ./.;
+
+            IMGUI_DIR = "${imgui-src}";
+
+            buildInputs = with pkgs; [
+                pkgs.gnumake
+                pkgs.gcc
+
+                pkgs.glfw3
+            ];
+            nativeBuildInputs = with pkgs; [ pkg-config ];
+
+            makeFlags = [ "PREFIX=$(out)" ];
+        };
         devShells.${system}.default = pkgs.mkShell {
             name = "midihex dev";
             buildInputs = with pkgs; [
@@ -30,6 +47,10 @@
             IMGUI_DIR = "${imgui-src}";
 
             shellHook = ''
+                export LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath [
+                    pkgs.libGl
+                    pkgs.wayland
+                ]}:$LD_LIBRARY_PATH
                 echo "Welcome to the devShell!"
                 echo "Use make to compile the project and make DEBUG=1 to add asan"
             '';

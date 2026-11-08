@@ -14,10 +14,10 @@
 #CXX = g++
 #CXX = clang++
 
+PREFIX ?= /usr/local
+
 EXE = bin/midihex
-ifndef IMGUI_DIR
-IMGUI_DIR = ../imgui
-endif
+IMGUI_DIR ?= ../imgui
 OBJDIR = bin/obj
 INCLUDEFOLDER = include
 SRCFOLDER = src
@@ -110,3 +110,8 @@ $(EXE): $(OBJS)
 
 clean:
 	rm -rf bin/*
+
+install: $(EXE)
+	mkdir -p $(DESTDIR)$(PREFIX)/bin
+	cp -r resources $(DESTDIR)$(PREFIX)/bin
+	cp $(EXE) $(DESTDIR)$(PREFIX)/bin
