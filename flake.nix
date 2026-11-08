@@ -49,7 +49,7 @@
             shellHook = ''
                 export LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath [
                     pkgs.libGL
-                    pkgs.wayland
+                    pkgs.mesa
                 ]}:$LD_LIBRARY_PATH
                 echo "Welcome to the devShell!"
                 echo "Use make to compile the project and make DEBUG=1 to add asan"

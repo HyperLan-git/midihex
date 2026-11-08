@@ -24,7 +24,8 @@ SRCFOLDER = src
 SOURCES = $(shell find $(SRCFOLDER) -type f -name '*.cpp' | sed -z 's/\n/ /g')
 SOURCES += $(IMGUI_DIR)/imgui.cpp $(IMGUI_DIR)/imgui_demo.cpp $(IMGUI_DIR)/imgui_draw.cpp $(IMGUI_DIR)/imgui_tables.cpp $(IMGUI_DIR)/imgui_widgets.cpp
 SOURCES += lib/stbi/stb_image.c
-SOURCES += $(IMGUI_DIR)/backends/imgui_impl_glfw.cpp $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
+SOURCES += $(IMGUI_DIR)/backends/imgui_impl_glfw.cpp
+SOURCES += $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
 INCLUDE = $(addprefix -I ,$(shell find $(INCLUDEFOLDER) -type d | sed -z 's/\n/ /g'))
 INCLUDE += -I lib/stbi -I lib/portable-file-dialogs
 O1 = $(SOURCES:$(IMGUI_DIR)/%.cpp=$(OBJDIR)/imgui/%.o)
