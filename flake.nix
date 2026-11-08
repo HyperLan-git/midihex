@@ -41,14 +41,14 @@
                 pkgs.gnumake
                 pkgs.gcc
 
-                pkgs.glfw3
+                pkgs.glfw-wayland
             ];
 
             IMGUI_DIR = "${imgui-src}";
 
             shellHook = ''
                 export LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath [
-                    pkgs.libGl
+                    pkgs.libEGL
                     pkgs.wayland
                 ]}:$LD_LIBRARY_PATH
                 echo "Welcome to the devShell!"
