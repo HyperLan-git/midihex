@@ -31,9 +31,13 @@
 
                 pkgs.glfw3
             ];
-            nativeBuildInputs = with pkgs; [ pkg-config ];
+            nativeBuildInputs = with pkgs; [ pkg-config makeWrapper ];
 
             makeFlags = [ "PREFIX=$(out)" ];
+
+            postInstall = ''
+                wrapProgram $out/bin/midihex --chdir "$out/bin"
+            '';
         };
         devShells.${system}.default = pkgs.mkShell {
             name = "midihex dev";
